@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF to Markdown Converter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+
+        .container {
+            max-width: 800px;
+            padding: 2rem;
+        }
+
+        .app-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .app-title {
+            color: #2d3748;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+        }
+
+        .drop-zone {
+            border: 2px dashed #4299e1;
+            border-radius: 1rem;
+            padding: 3rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 1.5rem;
+            position: relative;
+            background: #f8fafc;
+        }
+
+        .drop-zone:hover {
+            border-color: #3182ce;
+            background: #ebf8ff;
+        }
+
+        .drop-zone.dragover {
+            border-color: #2b6cb0;
+            background: #e6fffa;
+        }
+
+        .drop-zone .icon {
+            font-size: 4rem;
+            color: #4299e1;
+            margin-bottom: 1rem;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            border-radius: 1rem;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .token-counter {
+            background: #ebf8ff;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 500;
+            color: #2b6cb0;
+        }
+
+        .token-counter i {
+            color: #4299e1;
+        }
+
+        .markdown-output {
+            background: #fff;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .markdown-editor {
+            width: 100%;
+            min-height: 300px;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            margin-top: 1rem;
+        }
+
+        .selected-file {
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .selected-file.active {
+            display: block;
+        }
+
+        .convert-btn {
+            background: #4299e1;
+            border: none;
+            padding: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .convert-btn:hover {
+            background: #3182ce;
+            transform: translateY(-1px);
+        }
+
+        .convert-btn:disabled {
+            background: #a0aec0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="app-card">
+            <h1 class="text-center app-title">PDF to Markdown Converter</h1>
+
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                <div class="alert alert-danger mb-4">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form method="post" enctype="multipart/form-data" id="uploadForm">
+                <div class="drop-zone" id="dropZone">
+                    <div class="loading-overlay" id="loadingOverlay">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="icon">📄</div>
+                    <h4 class="mb-2">Drag your PDF file here</h4>
+                    <p class="text-muted">or click to select</p>
+                    <div class="selected-file" id="selectedFile">
+                        <span class="badge bg-primary"></span>
+                    </div>
+                    <input type="file" class="d-none" id="file" name="file" accept=".pdf">
+                </div>
+                <button type="submit" class="btn btn-primary w-100 convert-btn" id="submitBtn" disabled>
+                    <i class="bi bi-arrow-right-circle me-2"></i>Convert
+                </button>
+            </form>
+
+            {% if markdown_content %}
+            <div class="markdown-output mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    {% if token_count > 0 %}
+                    <div class="token-counter">
+                        <i class="bi bi-hash"></i>
+                        <span>{{ "{:,.3f}".format(token_count) }} tokens</span>
+                    </div>
+                    {% endif %}
+                    <button class="btn btn-outline-primary" id="copyBtn">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+                <textarea class="markdown-editor" id="markdownEditor" readonly>{{ markdown_content }}</textarea>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('file');
+            const form = document.getElementById('uploadForm');
+            const submitBtn = document.getElementById('submitBtn');
+            const selectedFile = document.getElementById('selectedFile');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, unhighlight, false);
+            });
+
+            dropZone.addEventListener('drop', handleDrop, false);
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFiles);
+            form.addEventListener('submit', handleSubmit);
+
+            if (document.getElementById('copyBtn')) {
+                document.getElementById('copyBtn').addEventListener('click', copyToClipboard);
+            }
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function highlight() {
+                dropZone.classList.add('dragover');
+            }
+
+            function unhighlight() {
+                dropZone.classList.remove('dragover');
+            }
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                handleFiles({ target: { files: dt.files } });
+            }
+
+            function handleFiles(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    if (files[0].type === 'application/pdf') {
+                        showSelectedFile(files[0].name);
+                        submitBtn.disabled = false;
+                    } else {
+                        alert('Please upload only PDF files');
+                        resetForm();
+                    }
+                }
+            }
+
+            function showSelectedFile(filename) {
+                selectedFile.querySelector('.badge').textContent = filename;
+                selectedFile.classList.add('active');
+            }
+
+            function resetForm() {
+                fileInput.value = '';
+                submitBtn.disabled = true;
+                selectedFile.classList.remove('active');
+            }
+
+            function handleSubmit(e) {
+                e.preventDefault();
+                loadingOverlay.classList.add('active');
+                form.submit();
+            }
+
+            async function copyToClipboard() {
+                const markdownEditor = document.getElementById('markdownEditor');
+                try {
+                    await navigator.clipboard.writeText(markdownEditor.value);
+                    const copyBtn = document.getElementById('copyBtn');
+                    copyBtn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy to clipboard');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
