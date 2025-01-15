@@ -173,10 +173,10 @@
             {% if markdown_content %}
             <div class="markdown-output mt-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    {% if token_count > 0 %}
+                    {% if current_tokens > 0 %}
                     <div class="token-counter">
                         <i class="bi bi-hash"></i>
-                        <span>{{ "{:,.3f}".format(token_count) }} tokens</span>
+                        <span>{{ current_tokens | thousands_separator }} tokens</span>
                     </div>
                     {% endif %}
                     <button class="btn btn-outline-primary" id="copyBtn">
@@ -186,6 +186,15 @@
                 <textarea class="markdown-editor" id="markdownEditor" readonly>{{ markdown_content }}</textarea>
             </div>
             {% endif %}
+
+            {% if current_tokens %}
+                <div class="alert alert-success">
+                    Current file tokens: {{ current_tokens | thousands_separator }}
+                </div>
+            {% endif %}
+            <div class="alert alert-info">
+                Total tokens processed: {{ total_tokens | thousands_separator }}
+            </div>
         </div>
     </div>
 

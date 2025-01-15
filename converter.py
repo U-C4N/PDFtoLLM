@@ -1,3 +1,4 @@
+import tiktoken
 import PyPDF2
 from pathlib import Path
 from typing import Callable, Optional
@@ -6,48 +7,27 @@ import re
 class PDFConverter:
     def __init__(self, logger):
         self.logger = logger
-        self.token_count = 0
+        # GPT-3.5-turbo için tiktoken encoder'ı
+        self.encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
-    def count_tokens(self, text: str) -> float:
-        """Metindeki token sayısını hesaplar."""
-        # Metni temizle ve normalize et
-        text = text.strip()
-
-        # Satır sonlarını boşluğa çevir
-        text = text.replace('\n', ' ')
-
-        # Ardışık boşlukları tekil boşluğa çevir
-        text = re.sub(r'\s+', ' ', text)
-
-        # Noktalama işaretlerini ve özel karakterleri ayır
-        text = re.sub(r'([.,!?;:])', r' \1 ', text)
-
-        # Kelimeleri bul (boşluklarla ayrılmış)
-        words = [word.strip() for word in text.split() if word.strip()]
-
-        # Sayılar ve özel karakterler için ekstra token sayımı
-        total_tokens = 0
-        for word in words:
-            # Sayılar için token hesaplama
-            if re.match(r'^\d+$', word):
-                total_tokens += len(word) * 0.5  # Her rakam yarım token
-            # Noktalama işaretleri
-            elif re.match(r'^[.,!?;:]$', word):
-                total_tokens += 0.25  # Noktalama işaretleri çeyrek token
-            # Normal kelimeler
-            else:
-                total_tokens += 1.0  # Her kelime bir token
-
-        return total_tokens
+    def count_tokens(self, text: str) -> int:
+        """GPT-3.5-turbo modeli için token sayısını hesaplar."""
+        try:
+            # Metni tokenlara böl
+            tokens = self.encoder.encode(text)
+            return len(tokens)
+        except Exception as e:
+            self.logger.error(f"Token sayımı sırasında hata: {e}")
+            return 0
 
     def convert_pdf(self, 
                    pdf_path: Path, 
-                   progress_callback: Optional[Callable] = None) -> tuple[str, float]:
+                   progress_callback: Optional[Callable] = None) -> tuple[str, int]:
         """PDF dosyasını Markdown'a dönüştürür ve token sayısını döndürür."""
         self.logger.info(f"'{pdf_path}' dönüştürülüyor...")
 
         markdown_content = []
-        total_tokens = 0.0
+        total_tokens = 0
 
         with open(pdf_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
@@ -60,19 +40,22 @@ class PDFConverter:
                 page = pdf_reader.pages[page_num]
                 text = page.extract_text()
 
-                # Token sayısını hesapla
-                page_tokens = self.count_tokens(text)
-                total_tokens += page_tokens
-                self.logger.debug(f"Sayfa {page_num + 1}: {page_tokens:,.3f} token")
-
                 # Markdown formatlaması
                 formatted_text = self._format_text(text)
                 markdown_content.append(formatted_text)
 
+                # Token sayısını hesapla
+                page_tokens = self.count_tokens(formatted_text)
+                total_tokens += page_tokens
+                self.logger.debug(f"Sayfa {page_num + 1}: {page_tokens:,} token")
+
                 self.logger.debug(f"Sayfa {page_num + 1} dönüştürüldü")
 
-        self.token_count = total_tokens
-        return "\n\n".join(markdown_content), total_tokens
+        final_markdown = "\n\n".join(markdown_content)
+        # Son bir kez tüm metin için token sayısını hesapla
+        total_tokens = self.count_tokens(final_markdown)
+        
+        return final_markdown, total_tokens
 
     def _format_text(self, text: str) -> str:
         """Metni Markdown formatına dönüştürür."""

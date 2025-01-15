@@ -53,7 +53,7 @@ def main():
         
         with Progress() as progress:
             # PDF'i oku ve dönüştür
-            markdown_content = converter.convert_pdf(
+            markdown_content, token_count = converter.convert_pdf(
                 input_path,
                 progress_callback=create_progress_bar(progress)
             )
@@ -63,6 +63,7 @@ def main():
             
             console.print(f"\n[green]Dönüştürme tamamlandı![/green]")
             console.print(f"Çıktı dosyası: {output_path}")
+            console.print(f"Toplam token sayısı: {int(token_count):,}")
 
     except Exception as e:
         console.print(f"[red]Hata: {str(e)}[/red]")
