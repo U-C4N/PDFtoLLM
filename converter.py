@@ -38,7 +38,11 @@ class PDFConverter:
                     progress_callback(page_num + 1, total_pages)
 
                 page = pdf_reader.pages[page_num]
-                text = page.extract_text()
+                try:
+                    text = str(page.extract_text())
+                except Exception as e:
+                    self.logger.error(f"Sayfa {page_num + 1} metin çıkarma hatası: {e}")
+                    text = ""  # Hata durumunda boş metin döndür
 
                 # Markdown formatlaması
                 formatted_text = self._format_text(text)
