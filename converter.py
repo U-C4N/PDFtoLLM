@@ -7,6 +7,7 @@ import pytesseract
 from PIL import Image
 import io
 import zipfile
+import fitz  # PyMuPDF
 
 class PDFConverter:
     def __init__(self, logger):
@@ -222,6 +223,7 @@ class PDFConverter:
         except Exception as e:
             self.logger.error(f"Error performing OCR: {e}")
             return ""
+
     def _clean_whitespace(self, text: str) -> str:
         """Gereksiz boşlukları temizler."""
         # Ardışık boş satırları tekil boş satıra dönüştür
@@ -229,3 +231,60 @@ class PDFConverter:
         # Satır sonlarındaki boşlukları temizle
         text = '\n'.join(line.rstrip() for line in text.split('\n'))
         return text.strip()
+
+    def extract_images_mupdf(self, pdf_path: Path) -> List[Tuple[str, bytes]]:
+        """Extract images from PDF using PyMuPDF with enhanced quality"""
+        images = []
+        try:
+            doc = fitz.open(pdf_path)
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                
+                # 1. Direkt sayfa görüntüsünden çıkarma
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x scaling for better quality
+                img_data = pix.tobytes()
+                if len(img_data) >= 100:
+                    name = f"page_{page_num + 1}.png"
+                    images.append((name, img_data))
+                    self.logger.info(f"Extracted full page {name}")
+
+                # 2. Gömülü resimleri çıkarma
+                img_list = page.get_images(full=True)
+                for img_idx, img in enumerate(img_list):
+                    try:
+                        xref = img[0]
+                        base_image = doc.extract_image(xref)
+                        
+                        if base_image:
+                            image_data = base_image["image"]
+                            if len(image_data) >= 1000:  # Minimum boyut kontrolü
+                                ext = base_image["ext"]
+                                name = f"image_{page_num + 1}_{img_idx + 1}.{ext}"
+                                
+                                # Görüntü kalitesini kontrol et
+                                try:
+                                    img = Image.open(io.BytesIO(image_data))
+                                    width, height = img.size
+                                    
+                                    # Minimum boyut kontrolü
+                                    if width >= 100 and height >= 100:
+                                        images.append((name, image_data))
+                                        self.logger.info(f"Extracted image {name} ({width}x{height})")
+                                    else:
+                                        self.logger.warning(f"Skipping small image {name} ({width}x{height})")
+                                except Exception as e:
+                                    self.logger.error(f"Error checking image quality: {e}")
+                                    
+                    except Exception as e:
+                        self.logger.error(f"Error extracting image {img_idx} from page {page_num + 1}: {e}")
+
+            doc.close()
+            
+            if not images:
+                self.logger.warning("No valid images found in PDF")
+                
+            return images
+            
+        except Exception as e:
+            self.logger.error(f"Error processing PDF with PyMuPDF: {e}")
+            return images

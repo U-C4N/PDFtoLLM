@@ -1,9 +1,12 @@
-from flask import Flask, render_template, request, flash
+from flask import Flask, render_template, request, flash, jsonify, send_file
 from werkzeug.utils import secure_filename
 import os
+import io
+import base64
 from pathlib import Path
 from converter import PDFConverter
 from console import setup_logger
+from PIL import Image
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev')  # Better security practice
@@ -76,6 +79,80 @@ def upload_file():
                 os.remove(filepath)
 
     return render_template('index.html', total_tokens=int(total_tokens))
+
+@app.route('/extract-images', methods=['POST'])
+def extract_images():
+    try:
+        filepath = handle_pdf_upload(request.files.get('file'))
+        logger = setup_logger(debug=True)
+        converter = PDFConverter(logger)
+        
+        # Yeni PyMuPDF metodunu kullan
+        images = converter.extract_images_mupdf(filepath)
+        
+        # Return image data directly in response
+        image_list = []
+        for name, data in images:
+            try:
+                # Görüntü verilerini kontrol et
+                img = Image.open(io.BytesIO(data))
+                width, height = img.size
+                
+                # Base64 formatına çevir
+                base64_data = base64.b64encode(data).decode('utf-8')
+                
+                # Dosya uzantısına göre MIME type belirle
+                ext = name.split('.')[-1].lower()
+                mime_type = 'image/jpeg' if ext in ['jpg', 'jpeg'] else f'image/{ext}'
+                
+                image_list.append({
+                    'name': name,
+                    'data': f'data:{mime_type};base64,{base64_data}',
+                    'width': width,
+                    'height': height,
+                    'size': len(data)
+                })
+                logger.info(f"Processed {name} ({width}x{height}, {len(data)} bytes)")
+            except Exception as e:
+                logger.error(f"Error processing image {name}: {e}")
+        
+        logger.info(f"Extracted {len(image_list)} valid images from {filepath.name}")
+        os.remove(filepath)
+        
+        if not image_list:
+            return jsonify({'error': 'No valid images found in PDF'}), 404
+            
+        return jsonify({'images': image_list})
+        
+    except Exception as e:
+        if 'filepath' in locals() and filepath.exists():
+            os.remove(filepath)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/download-images', methods=['POST'])
+def download_images():
+    try:
+        filepath = handle_pdf_upload(request.files.get('file'))
+        logger = setup_logger(debug=True)
+        converter = PDFConverter(logger)
+        
+        # Yeni PyMuPDF metodunu kullan
+        images = converter.extract_images_mupdf(filepath)
+        zip_data = converter.create_image_zip(images)
+        
+        os.remove(filepath)
+        logger.info(f"Created ZIP with {len(images)} images from {filepath.name}")
+        
+        return send_file(
+            io.BytesIO(zip_data),
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='images.zip'
+        )
+    except Exception as e:
+        if 'filepath' in locals() and filepath.exists():
+            os.remove(filepath)
+        return jsonify({'error': str(e)}), 500
 
 @app.template_filter('thousands_separator')
 def thousands_separator(number):

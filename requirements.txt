@@ -6,3 +6,4 @@ pytesseract==0.3.10
 Pillow==10.0.0
 python-magic==0.4.27
 rich==13.7.0
+PyMuPDF==1.23.8

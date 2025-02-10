@@ -154,8 +154,8 @@
 
         .image-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
             padding: 1rem;
             background: #f8fafc;
             border-radius: 0.5rem;
@@ -163,32 +163,58 @@
 
         .image-item {
             background: white;
-            padding: 0.5rem;
+            padding: 0.75rem;
             border-radius: 0.5rem;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            transition: transform 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            flex-direction: column;
         }
 
         .image-item:hover {
             transform: translateY(-2px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .image-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 75%; /* 4:3 aspect ratio */
+            overflow: hidden;
+            border-radius: 0.375rem;
+            background: #f1f5f9;
         }
 
         .image-item img {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
-            height: auto;
-            border-radius: 0.25rem;
-            object-fit: cover;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 0.375rem;
         }
 
-        .image-item p {
-            margin: 0.5rem 0 0;
+        .image-info {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .image-name {
             font-size: 0.875rem;
-            color: #64748b;
-            text-align: center;
+            color: #1e293b;
+            font-weight: 500;
+            margin: 0;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+
+        .image-details {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 0.25rem;
         }
     </style>
 </head>
@@ -249,9 +275,7 @@
                         <i class="bi bi-download"></i> Download All
                     </button>
                 </div>
-                <div class="image-grid" id="imageGrid">
-                    <!-- Images will be dynamically added here -->
-                </div>
+                <div class="image-grid" id="imageGrid"></div>
             </div>
 
             {% if current_tokens %}
@@ -273,6 +297,11 @@
             const submitBtn = document.getElementById('submitBtn');
             const selectedFile = document.getElementById('selectedFile');
             const loadingOverlay = document.getElementById('loadingOverlay');
+            const markdownEditor = document.getElementById('markdownEditor');
+            const copyBtn = document.getElementById('copyBtn');
+            const imagesSection = document.getElementById('imagesSection');
+            const imageGrid = document.getElementById('imageGrid');
+            const downloadImagesBtn = document.getElementById('downloadImagesBtn');
 
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
                 dropZone.addEventListener(eventName, preventDefaults, false);
@@ -292,10 +321,6 @@
             fileInput.addEventListener('change', handleFiles);
             form.addEventListener('submit', handleSubmit);
 
-            const imagesSection = document.getElementById('imagesSection');
-            const imageSelect = document.getElementById('imageSelect');
-            const downloadImagesBtn = document.getElementById('downloadImagesBtn');
-            
             if (document.getElementById('copyBtn')) {
                 document.getElementById('copyBtn').addEventListener('click', copyToClipboard);
             }
@@ -334,12 +359,23 @@
             function displayImages(images) {
                 const imageGrid = document.getElementById('imageGrid');
                 imageGrid.innerHTML = images
-                    .map(img => `
-                        <div class="image-item">
-                            <img src="data:image/png;base64,${img.data}" alt="${img.name}" />
-                            <p>${img.name}</p>
-                        </div>
-                    `).join('');
+                    .map(img => {
+                        const sizeInKB = Math.round(img.size / 1024);
+                        return `
+                            <div class="image-item">
+                                <div class="image-container">
+                                    <img src="${img.data}" alt="${img.name}" loading="lazy" />
+                                </div>
+                                <div class="image-info">
+                                    <p class="image-name">${img.name}</p>
+                                    <p class="image-details">
+                                        ${img.width}x${img.height}px · ${sizeInKB}KB
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                    })
+                    .join('');
             }
             
             downloadImagesBtn.addEventListener('click', async () => {
