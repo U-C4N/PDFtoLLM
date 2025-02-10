@@ -1,10 +1,9 @@
 # PDF to Markdown Converter with OCR & Image Extraction
 
-![PDF to Markdown](https://raw.githubusercontent.com/U-C4N/pdftomarkdown/main/generated-icon.png)
+![PDF to Markdown](screen.png)
 
 A powerful web-based PDF to Markdown converter that combines OCR technology with advanced image extraction capabilities. Convert your PDF files to Markdown format while preserving images and extracting text from scanned documents. Perfect for researchers, developers, and content creators who need to convert complex PDFs with images and tables into clean, structured Markdown.
 
-[🔗 Live Demo](https://pdftomarkdown.u-c4n.repl.co)
 
 ## ✨ Features
 
