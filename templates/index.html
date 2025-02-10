@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF to Markdown Converter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body {
+            min-height: 100vh;
+            background: #f8fafc;
+            padding: 2rem 0;
+        }
+
+        .container {
+            max-width: 800px;
+        }
+
+        .app-card {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+        }
+
+        .app-title {
+            color: #1e293b;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+        }
+
+        .drop-zone {
+            border: 2px dashed #6366f1;
+            border-radius: 0.75rem;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            margin-bottom: 1.5rem;
+            position: relative;
+            background: #f1f5f9;
+        }
+
+        .drop-zone:hover {
+            border-color: #4f46e5;
+            background: #f8fafc;
+        }
+
+        .drop-zone.dragover {
+            border-color: #4338ca;
+            background: #f8fafc;
+        }
+
+        .drop-zone .icon {
+            font-size: 3rem;
+            color: #6366f1;
+            margin-bottom: 0.75rem;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            border-radius: 0.75rem;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .token-counter {
+            background: #f1f5f9;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+            color: #1e293b;
+        }
+
+        .token-counter i {
+            color: #6366f1;
+        }
+
+        .markdown-output, .images-section {
+            background: #fff;
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .markdown-editor {
+            width: 100%;
+            min-height: 300px;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            margin-top: 0.75rem;
+        }
+
+        .selected-file {
+            margin-top: 0.75rem;
+            display: none;
+        }
+
+        .selected-file.active {
+            display: block;
+        }
+
+        .convert-btn, .btn-outline-primary {
+            background: #6366f1;
+            border: none;
+            padding: 0.75rem 1rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            color: white;
+        }
+
+        .convert-btn:hover, .btn-outline-primary:hover {
+            background: #4f46e5;
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        .convert-btn:disabled {
+            background: #94a3b8;
+            transform: none;
+        }
+
+        .btn-outline-primary {
+            background: transparent;
+            border: 1px solid #6366f1;
+            color: #6366f1;
+        }
+
+        .form-select {
+            border-color: #e2e8f0;
+            border-radius: 0.5rem;
+        }
+
+        .form-select:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 1px #6366f1;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 0.5rem;
+        }
+
+        .image-item {
+            background: white;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease;
+        }
+
+        .image-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .image-item img {
+            width: 100%;
+            height: auto;
+            border-radius: 0.25rem;
+            object-fit: cover;
+        }
+
+        .image-item p {
+            margin: 0.5rem 0 0;
+            font-size: 0.875rem;
+            color: #64748b;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="app-card">
+            <h1 class="text-center app-title">PDF to Markdown Converter</h1>
+
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                <div class="alert alert-danger mb-4">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form method="post" enctype="multipart/form-data" id="uploadForm">
+                <div class="drop-zone" id="dropZone">
+                    <div class="loading-overlay" id="loadingOverlay">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="icon">📄</div>
+                    <h4 class="mb-2">Drag your PDF file here</h4>
+                    <p class="text-muted">or click to select</p>
+                    <div class="selected-file" id="selectedFile">
+                        <span class="badge bg-primary"></span>
+                    </div>
+                    <input type="file" class="d-none" id="file" name="file" accept=".pdf">
+                </div>
+                <button type="submit" class="btn btn-primary w-100 convert-btn" id="submitBtn" disabled>
+                    <i class="bi bi-arrow-right-circle me-2"></i>Convert
+                </button>
+            </form>
+
+            {% if markdown_content %}
+            <div class="markdown-output mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    {% if current_tokens > 0 %}
+                    <div class="token-counter">
+                        <i class="bi bi-hash"></i>
+                        <span>{{ current_tokens | thousands_separator }} tokens</span>
+                    </div>
+                    {% endif %}
+                    <button class="btn btn-outline-primary" id="copyBtn">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+                <textarea class="markdown-editor" id="markdownEditor" readonly>{{ markdown_content }}</textarea>
+            </div>
+            {% endif %}
+            
+            <div class="images-section mt-4" id="imagesSection" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Extracted Images</h5>
+                    <button class="btn btn-outline-primary" id="downloadImagesBtn">
+                        <i class="bi bi-download"></i> Download All
+                    </button>
+                </div>
+                <div class="image-grid" id="imageGrid">
+                    <!-- Images will be dynamically added here -->
+                </div>
+            </div>
+
+            {% if current_tokens %}
+                <div class="alert alert-success">
+                    Current file tokens: {{ current_tokens | thousands_separator }}
+                </div>
+            {% endif %}
+            <div class="alert alert-info">
+                Total tokens processed: {{ total_tokens | thousands_separator }}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('file');
+            const form = document.getElementById('uploadForm');
+            const submitBtn = document.getElementById('submitBtn');
+            const selectedFile = document.getElementById('selectedFile');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, unhighlight, false);
+            });
+
+            dropZone.addEventListener('drop', handleDrop, false);
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFiles);
+            form.addEventListener('submit', handleSubmit);
+
+            const imagesSection = document.getElementById('imagesSection');
+            const imageSelect = document.getElementById('imageSelect');
+            const downloadImagesBtn = document.getElementById('downloadImagesBtn');
+            
+            if (document.getElementById('copyBtn')) {
+                document.getElementById('copyBtn').addEventListener('click', copyToClipboard);
+            }
+            
+            async function extractImages(file) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/extract-images', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error('Failed to extract images');
+                
+                const data = await response.json();
+                return data.images;
+            }
+            
+            async function handleFileUpload(file) {
+                try {
+                    loadingOverlay.classList.add('active');
+                    const images = await extractImages(file);
+                    if (images.length > 0) {
+                        displayImages(images);
+                        imagesSection.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Failed to extract images: ' + error.message);
+                } finally {
+                    loadingOverlay.classList.remove('active');
+                }
+            }
+
+            function displayImages(images) {
+                const imageGrid = document.getElementById('imageGrid');
+                imageGrid.innerHTML = images
+                    .map(img => `
+                        <div class="image-item">
+                            <img src="data:image/png;base64,${img.data}" alt="${img.name}" />
+                            <p>${img.name}</p>
+                        </div>
+                    `).join('');
+            }
+            
+            downloadImagesBtn.addEventListener('click', async () => {
+                const file = document.getElementById('file').files[0];
+                if (!file) return;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const originalBtnText = downloadImagesBtn.innerHTML;
+                downloadImagesBtn.innerHTML = '<i class="bi bi-hourglass"></i> Downloading...';
+                downloadImagesBtn.disabled = true;
+                
+                try {
+                    const response = await fetch('/download-images', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) throw new Error('Download failed');
+                    
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'images.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    downloadImagesBtn.innerHTML = '<i class="bi bi-check"></i> Downloaded!';
+                    setTimeout(() => {
+                        downloadImagesBtn.innerHTML = originalBtnText;
+                        downloadImagesBtn.disabled = false;
+                    }, 2000);
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Failed to download images: ' + error.message);
+                    downloadImagesBtn.innerHTML = originalBtnText;
+                    downloadImagesBtn.disabled = false;
+                }
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function highlight() {
+                dropZone.classList.add('dragover');
+            }
+
+            function unhighlight() {
+                dropZone.classList.remove('dragover');
+            }
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                handleFiles({ target: { files: dt.files } });
+            }
+
+            function handleFiles(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    if (files[0].type === 'application/pdf') {
+                        showSelectedFile(files[0].name);
+                        submitBtn.disabled = false;
+                        handleFileUpload(files[0]);
+                    } else {
+                        alert('Please upload only PDF files');
+                        resetForm();
+                    }
+                }
+            }
+
+            function showSelectedFile(filename) {
+                selectedFile.querySelector('.badge').textContent = filename;
+                selectedFile.classList.add('active');
+            }
+
+            function resetForm() {
+                fileInput.value = '';
+                submitBtn.disabled = true;
+                selectedFile.classList.remove('active');
+            }
+
+            function handleSubmit(e) {
+                e.preventDefault();
+                loadingOverlay.classList.add('active');
+                form.submit();
+            }
+
+            async function copyToClipboard() {
+                const markdownEditor = document.getElementById('markdownEditor');
+                try {
+                    await navigator.clipboard.writeText(markdownEditor.value);
+                    const copyBtn = document.getElementById('copyBtn');
+                    copyBtn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy to clipboard');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

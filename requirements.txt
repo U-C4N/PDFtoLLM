@@ -1,0 +1,8 @@
+flask==2.0.1
+werkzeug==2.0.1
+PyPDF2==3.0.1
+tiktoken==0.5.1
+pytesseract==0.3.10
+Pillow==10.0.0
+python-magic==0.4.27
+rich==13.7.0
